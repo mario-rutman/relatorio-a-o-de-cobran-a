@@ -1,0 +1,246 @@
+---
+title: "5ª Ação de Cobrança."
+author: ""
+date: ""
+output: 
+  html_document:
+    highlight: espresso
+    theme: united
+---
+#### `r format(Sys.Date(), '%d-%b-%Y')`. 
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(glue)
+library(DT)
+library(extrafont)
+library(showtext)
+```
+
+
+```{r global, include=FALSE}
+# load data in 'global' chunk so it can be shared by all users of the dashboard
+quinta_acao <- readRDS("quinta_acao.rds")
+quinta_acao_agrup <- quinta_acao %>% #Selecionando as colunas desejadas.
+  select(c(3,4,5)) %>% #Arrumando os dados com pivot_longer
+  pivot_longer(!NO_RAZAO, names_to = "arrec_x_parcel", values_to = "valor") %>% #Retirando os NAs.
+  filter(!is.na(valor) & valor > 0) %>% #Agrupando para totalizar.
+  group_by(NO_RAZAO, arrec_x_parcel) %>% 
+  summarise(total = sum(valor))
+
+n_CNPJ <- n_distinct(quinta_acao$CNPJ_DEVEDOR)
+n_raiz <- n_distinct(quinta_acao$RAIZ)
+n_empres <- n_distinct(quinta_acao$NO_RAZAO)
+arrec <- sum(quinta_acao$VL_TOTAL_ARRECADADO, na.rm = TRUE)
+parcel <- sum(quinta_acao$VL_TOTAL_PARCELADO, na.rm = TRUE)
+tot_arrec <- round((sum(quinta_acao$VL_TOTAL_ARRECADADO, na.rm = TRUE))/1e6 , 1) %>%  
+ prettyNum(big.mark = ".", decimal.mark = ",")
+tot_parcel <- round((sum(quinta_acao$VL_TOTAL_PARCELADO, na.rm = TRUE))/1e6 , 1) %>% 
+  prettyNum(big.mark = ".", decimal.mark = ",")
+resultado <- round((arrec + parcel)/1e6, 1) %>%
+  prettyNum(big.mark = ".", decimal.mark = ",")
+perc_pagantes <- round(n_distinct(quinta_acao_agrup$NO_RAZAO)*100/n_distinct(quinta_acao$NO_RAZAO), 0) 
+
+# Baixando a fonte Ubuntu.
+library(showtext)
+# Loading Google fonts (https://fonts.google.com/)
+font_add_google("Ubuntu", "ubuntu")
+# Automatically use showtext to render text
+showtext_auto()
+font <- "ubuntu"
+
+
+```
+## {.tabset .tabset-pills}
+### __Informações Gerais.__
+
+#### A presente ação, iniciada em 14-out-2020, incluiu __`r n_raiz`__ empresas com __`r n_CNPJ`__ inscrições diferentes, portanto aproximadamente __`r round(n_CNPJ/n_raiz, 0)`__ por empresa. 
+
+#### Foram arrecadados __`r glue("R$ {tot_arrec}")` milhões__ e feitos parcelamentos no total de __`r glue("R$ {tot_parcel}")` milhões__. Desta forma, o estoque de débitos em aberto diminuiu em __R$ `r resultado` milhões__.
+
+#### Recuperamos, em média, __R$`r round((arrec + parcel)/(n_raiz * 1000),0)`mil__ por empresa nesta ação. Sendo __`r round(parcel * 100/(arrec + parcel), 0)`%__ na modalidade parcelamento.
+
+#### Das empresas contactadas __`r perc_pagantes`%__ parcelaram ou pagaram seus débitos.
+
+### __Contribuintes que parcelaram.__
+
+```{r echo=FALSE, warning=FALSE, fig.height=6, fig.width=10}
+
+#Preparando o DF para usar no ggplot.
+quinta_acao_agrup %>% # Filtrando só os que parcelaram.
+  filter(arrec_x_parcel == 'VL_TOTAL_PARCELADO') %>% 
+#Fazendo o gráfico.
+ggplot(aes(x = fct_reorder(NO_RAZAO, -total), y = total/1e3)) +
+  geom_col(fill = "#dd4814") +
+  geom_text(aes(label = prettyNum(round(total/1e3, 0), big.mark = ".", decimal.mark = ",")),
+            vjust = -0.2, hjust = 0.5, size = 16, color = "black") +
+  ylim(0, 10000) +
+  labs(title = "Valores recuperados na 5ª ação de cobrança (em milhares de R$)",
+       subtitle = "",
+      caption = "fonte: SEF01P") +
+  scale_x_discrete(labels=c("ALCOOL QUIMICA CANABRAVA S/A" = "ALCOOL\nQUIM.",
+                            "CENCOSUD BRASIL COMERCIAL LTDA" = "CENCOSUD",
+                    "GRUPO GENNIUS BRASIL PRODUCAO E COMERCIALIZACAO DE ALIMENTOS S.A" = "GENNIUS\nBRASIL",
+                            "HAVITA IMPORTACAO E EXPORTACAO LTDA" = "HAVITA",
+                            "ME RJ IMPORTACAO E DISTRIBUICAO EIRELI" = "ME RJ\nIMPORT.",
+                            "MERCADO DO LARGO DA PREGUICA LTDA" = "LARGO DA\nPREGUICA",
+                            "NOVA GERACAO COMESTIVEIS S.A"  = "NOVA\nGERACAO",
+                            "MIX CERTO DISTRIBUIDORA DE COSMETICOS ALIMENTOS E LIMPEZA LTDA" = "MIX CERTO",
+                            "ROGRANE INDUSTRIA E PARTICIPACOES LTDA" = "ROGRANE",
+                            "SIMCAUTO MECANICA E REPRESENTACOES LTDA" = "SIMCAUTO")) +
+  theme(
+
+    #Text format:
+    #This sets the font, size, type and colour of text for the chart's title
+    plot.title = ggplot2::element_text(family=font,
+                                       size=32,
+                                       #face="bold",
+                                       color="#222222"),
+    #This sets the font, size, type and colour of text for the chart's subtitle, as well as setting a margin between the title and the subtitle
+    plot.subtitle = ggplot2::element_text(family=font,
+                                          size=22,
+                                          margin=ggplot2::margin(9,0,9,0)),
+    plot.caption = ggplot2::element_text(family=font,
+                                         size=22),
+
+    # Não gosto de legenda, então vou comentar (retirar) a do bbc_style e
+    # colocar legend.position = "none"
+    #Legend format
+    #This sets the position and alignment of the legend, removes a title and backround for it and sets the requirements for any text within the legend. The legend may often need some more manual tweaking when it comes to its exact position based on the plot coordinates.
+    # legend.position = "top",
+    # legend.text.align = 0,
+    # legend.background = ggplot2::element_blank(),
+     legend.title = ggplot2::element_blank(),
+    # legend.key = ggplot2::element_blank(),
+     legend.text = ggplot2::element_text(family=font,
+                                         size=22,
+                                         color="#222222"),
+    legend.position = "top",
+
+
+    #Axis format
+    #This sets the text font, size and colour for the axis test, as well as setting the margins and removes lines and ticks. In some cases, axis lines and axis ticks are things we would want to have in the chart - the cookbook shows examples of how to do so.
+    axis.title = ggplot2::element_blank(),
+    axis.text = ggplot2::element_text(family=font,
+                                      size=22,
+                                      color="#222222"),
+    axis.text.x = ggplot2::element_text(margin=ggplot2::margin(5, b = 10)),
+    axis.ticks = ggplot2::element_blank(),
+    axis.line = ggplot2::element_blank(),
+
+    # Também acho que valores no eixo y poluem o gráfico.
+    # Retirá-los-ei do gráfico.
+    axis.title.y = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+
+    #Grid lines
+    #This removes all minor gridlines and adds major y gridlines. In many cases you will want to change this to remove y gridlines and add x gridlines. The cookbook shows you examples for doing so
+    panel.grid.minor = ggplot2::element_blank(),
+    panel.grid.major.y = ggplot2::element_line(color="#cbcbcb"),
+    panel.grid.major.x = ggplot2::element_blank(),
+
+    #Blank background
+    #This sets the panel background as blank, removing the standard grey ggplot background colour from the plot
+    panel.background = ggplot2::element_blank(),
+
+    #Strip background (#This sets the panel background for facet-wrapped plots to white, removing the standard grey ggplot background colour and sets the title size of the facet-wrap title to font size 22)
+    strip.background = ggplot2::element_rect(fill="white"),
+    strip.text = ggplot2::element_text(size  = 22,  hjust = 0)
+  )
+    
+    
+```
+
+
+### __Contribuintes que pagaram à vista.__
+
+```{r echo=FALSE, warning=FALSE, fig.height=6, fig.width=10}
+
+#Preparando o DF para usar no ggplot.
+quinta_acao_agrup %>% # Filtrando só os que parcelaram.
+  filter(arrec_x_parcel == 'VL_TOTAL_ARRECADADO' & total > 1000) %>% 
+#Fazendo o gráfico.
+ggplot(aes(x = fct_reorder(NO_RAZAO, -total), y = total/1e3)) +
+  geom_col(fill = "#dd4814") +
+  geom_text(aes(label = prettyNum(round(total/1e3, 0),big.mark = ".", decimal.mark = ",")),
+            vjust = -0.2, hjust = 0.5, size = 16, color = "black") +
+  ylim(0, 1400) +
+  labs(title = "Valores recuperados na 5ª ação de cobrança (em milhares de R$)",
+       subtitle = "",
+      caption = "fonte: SEF01P") +
+  scale_x_discrete(labels=c("ATIV COMERCIO DE ALIMENTOS LTDA" = "ATIV COM.",
+                            "CENCOSUD BRASIL COMERCIAL LTDA" = "CENCOSUD",
+                            "FRIGORÍFICO JAHU EIRELI" = "FRIG.\nJAHU",
+                            "ISERO INDUSTRIA E COMERCIO LTDA" = "ISERO IND.",
+                            "LEROY MERLIN COMPANHIA BRASILEIRA DE BRICOLAGEM" = "LEROY\nMERLIN",
+                            "LOJAS MAGAL DE UTILIDADES LTDA" = "LOJAS\nMAGAL",
+                            "PRIMUS RIO COMERCIO DE UTILIDADES DO LAR EIRELI" = "PRIMUS\nRIO",
+                            "RIO ITA LTDA" = "RIO ITA",
+                            "ROGRANE INDUSTRIA E PARTICIPACOES LTDA" = "ROGRANE",
+                            "TEX COURIER LTDA EM RECUPERACAO JUDICIAL" = "TEX\nCOURIER",
+                      "VITORIALOG TRANSPORTES E PRESTAÇÃO DE SERVIÇOS EIRELI" = "VITORIALOG\nTRANSP.")) +
+  theme(
+
+    #Text format:
+    #This sets the font, size, type and colour of text for the chart's title
+    plot.title = ggplot2::element_text(family=font,
+                                       size=32,
+                                       #face="bold",
+                                       color="#222222"),
+    #This sets the font, size, type and colour of text for the chart's subtitle, as well as setting a margin between the title and the subtitle
+    plot.subtitle = ggplot2::element_text(family=font,
+                                          size=22,
+                                          margin=ggplot2::margin(9,0,9,0)),
+    plot.caption = ggplot2::element_text(family=font,
+                                         size=22),
+
+    # Não gosto de legenda, então vou comentar (retirar) a do bbc_style e
+    # colocar legend.position = "none"
+    #Legend format
+    #This sets the position and alignment of the legend, removes a title and backround for it and sets the requirements for any text within the legend. The legend may often need some more manual tweaking when it comes to its exact position based on the plot coordinates.
+    # legend.position = "top",
+    # legend.text.align = 0,
+    # legend.background = ggplot2::element_blank(),
+     legend.title = ggplot2::element_blank(),
+    # legend.key = ggplot2::element_blank(),
+     legend.text = ggplot2::element_text(family=font,
+                                         size=22,
+                                         color="#222222"),
+    legend.position = "top",
+
+
+    #Axis format
+    #This sets the text font, size and colour for the axis test, as well as setting the margins and removes lines and ticks. In some cases, axis lines and axis ticks are things we would want to have in the chart - the cookbook shows examples of how to do so.
+    axis.title = ggplot2::element_blank(),
+    axis.text = ggplot2::element_text(family=font,
+                                      size=22,
+                                      color="#222222"),
+    axis.text.x = ggplot2::element_text(margin=ggplot2::margin(5, b = 10)),
+    axis.ticks = ggplot2::element_blank(),
+    axis.line = ggplot2::element_blank(),
+
+    # Também acho que valores no eixo y poluem o gráfico.
+    # Retirá-los-ei do gráfico.
+    axis.title.y = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+
+    #Grid lines
+    #This removes all minor gridlines and adds major y gridlines. In many cases you will want to change this to remove y gridlines and add x gridlines. The cookbook shows you examples for doing so
+    panel.grid.minor = ggplot2::element_blank(),
+    panel.grid.major.y = ggplot2::element_line(color="#cbcbcb"),
+    panel.grid.major.x = ggplot2::element_blank(),
+
+    #Blank background
+    #This sets the panel background as blank, removing the standard grey ggplot background colour from the plot
+    panel.background = ggplot2::element_blank(),
+
+    #Strip background (#This sets the panel background for facet-wrapped plots to white, removing the standard grey ggplot background colour and sets the title size of the facet-wrap title to font size 22)
+    strip.background = ggplot2::element_rect(fill="white"),
+    strip.text = ggplot2::element_text(size  = 22,  hjust = 0)
+  )
+    
+    
+```
+
